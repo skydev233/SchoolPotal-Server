@@ -11,18 +11,5 @@
       "src": "/api/(.*)",
       "dest": "src/index.js"
     }
-  ],
-  "env": {
-    "MYSQL_HOST": "@mysql_host",
-    "MYSQL_PORT": "@mysql_port",
-    "MYSQL_USER": "@mysql_user",
-    "MYSQL_PASSWORD": "@mysql_password",
-    "MYSQL_DATABASE": "@mysql_database",
-    "SMTP_HOST": "@smtp_host",
-    "SMTP_PORT": "@smtp_port",
-    "SMTP_USER": "@smtp_user",
-    "SMTP_PASS": "@smtp_pass",
-    "SMTP_FROM": "@smtp_from",
-    "RTMP_HOST": "@rtmp_host"
-  }
+  ]
 }
