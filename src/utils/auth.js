@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = 'school-portal-secret-key-2024';
+const JWT_SECRET = '1298b2189f52a07029b725b4050504bae9c4472cb3e892226b6d1b4d85c877d8';
 
 export function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');

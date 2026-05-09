@@ -1,90 +1,88 @@
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 
 let pool = null;
+const { Pool } = pg;
+const DATABASE_URL = 'postgresql://neondb_owner:npg_rKXyAMs0pCh1@ep-little-recipe-ao1vdehm-pooler.c-2.ap-southeast-1.aws.neon.tech/schoolpotal?sslmode=verify-full&channel_binding=require';
+const SMTP_CONFIG = {
+  host: 'smtp.qq.com',
+  port: '587',
+  user: '1519732521@qq.com',
+  pass: 'olewrrnmqbufgfcj',
+  from: '1519732521@qq.com'
+};
+const RTMP_HOST = 'localhost';
 
 export async function initDatabase() {
-  const host = process.env.MYSQL_HOST || 'localhost';
-  const port = process.env.MYSQL_PORT || 3306;
-  const user = process.env.MYSQL_USER || 'root';
-  const password = process.env.MYSQL_PASSWORD || '';
-  const database = process.env.MYSQL_DATABASE || 'schoolportal';
-
-  pool = mysql.createPool({
-    host,
-    port,
-    user,
-    password,
-    database,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
   });
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(255) NOT NULL UNIQUE,
-      email VARCHAR(255) UNIQUE,
-      password VARCHAR(255) NOT NULL,
-      role VARCHAR(50) NOT NULL DEFAULT 'user',
-      created_at VARCHAR(100) NOT NULL
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT UNIQUE,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at TEXT NOT NULL
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS notices (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      tag VARCHAR(100) NOT NULL,
-      published_at VARCHAR(100) NOT NULL
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      published_at TEXT NOT NULL
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS live_channels (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
       description TEXT,
-      created_at VARCHAR(100) NOT NULL
+      created_at TEXT NOT NULL
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS live_schedules (
-      id INT AUTO_INCREMENT PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       channel_id INT NOT NULL,
-      title VARCHAR(255) NOT NULL,
-      start_time VARCHAR(100) NOT NULL,
-      end_time VARCHAR(100),
-      stream_key VARCHAR(255) NOT NULL,
+      title TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      stream_key TEXT NOT NULL,
       user_id INT NOT NULL,
-      user_email VARCHAR(255) NOT NULL,
-      status VARCHAR(50) DEFAULT 'scheduled',
-      created_at VARCHAR(100) NOT NULL,
+      user_email TEXT NOT NULL,
+      status TEXT DEFAULT 'scheduled',
+      created_at TEXT NOT NULL,
       FOREIGN KEY (channel_id) REFERENCES live_channels(id)
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS portal_stats (
-      k VARCHAR(100) PRIMARY KEY,
+      k TEXT PRIMARY KEY,
       v INT NOT NULL
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS settings (
-      k VARCHAR(100) PRIMARY KEY,
+      k TEXT PRIMARY KEY,
       v TEXT NOT NULL
     )
   `);
 
-  await pool.execute(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS email_verifications (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      email VARCHAR(255) NOT NULL,
-      code VARCHAR(50) NOT NULL,
-      expires_at VARCHAR(100) NOT NULL,
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
       used INT DEFAULT 0
     )
   `);
@@ -93,43 +91,43 @@ export async function initDatabase() {
 }
 
 async function seedData() {
-  const [notices] = await pool.execute('SELECT COUNT(*) as count FROM notices');
-  if (notices[0].count === 0) {
+  const notices = await get('SELECT COUNT(*)::int as count FROM notices');
+  if (notices.count === 0) {
     const now = new Date().toISOString();
-    await pool.execute('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['欢迎使用校园门户平台', '公告', now]);
-    await pool.execute('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['关于近期网络维护的通知', '信息中心', now]);
-    await pool.execute('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['本周学术讲座安排', '学术', now]);
+    await run('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['欢迎使用校园门户平台', '公告', now]);
+    await run('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['关于近期网络维护的通知', '信息中心', now]);
+    await run('INSERT INTO notices (title, tag, published_at) VALUES (?, ?, ?)', ['本周学术讲座安排', '学术', now]);
   }
 
-  const [channels] = await pool.execute('SELECT COUNT(*) as count FROM live_channels');
-  if (channels[0].count === 0) {
+  const channels = await get('SELECT COUNT(*)::int as count FROM live_channels');
+  if (channels.count === 0) {
     const now = new Date().toISOString();
-    await pool.execute('INSERT INTO live_channels (name, description, created_at) VALUES (?, ?, ?)', ['主频道', '学校官方直播频道', now]);
-    await pool.execute('INSERT INTO live_channels (name, description, created_at) VALUES (?, ?, ?)', ['教学频道', '用于在线课程直播', now]);
+    await run('INSERT INTO live_channels (name, description, created_at) VALUES (?, ?, ?)', ['主频道', '学校官方直播频道', now]);
+    await run('INSERT INTO live_channels (name, description, created_at) VALUES (?, ?, ?)', ['教学频道', '用于在线课程直播', now]);
   }
 
-  const [stats] = await pool.execute('SELECT COUNT(*) as count FROM portal_stats');
-  if (stats[0].count === 0) {
-    await pool.execute('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['students', 3248]);
-    await pool.execute('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['courses', 42]);
-    await pool.execute('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['todos', 12]);
-    await pool.execute('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['activities', 6]);
+  const stats = await get('SELECT COUNT(*)::int as count FROM portal_stats');
+  if (stats.count === 0) {
+    await run('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['students', 3248]);
+    await run('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['courses', 42]);
+    await run('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['todos', 12]);
+    await run('INSERT INTO portal_stats (k, v) VALUES (?, ?)', ['activities', 6]);
   }
 
   const defaultSettings = {
     'registration_enabled': 'true',
     'allowed_email_domain': '',
-    'smtp_host': '',
-    'smtp_port': '587',
-    'smtp_username': '',
-    'smtp_password': '',
-    'smtp_from': '',
+    'smtp_host': SMTP_CONFIG.host,
+    'smtp_port': SMTP_CONFIG.port,
+    'smtp_username': SMTP_CONFIG.user,
+    'smtp_password': SMTP_CONFIG.pass,
+    'smtp_from': SMTP_CONFIG.from,
     'email_verification': 'true',
-    'rtmp_host': 'localhost'
+    'rtmp_host': RTMP_HOST
   };
 
   for (const [k, v] of Object.entries(defaultSettings)) {
-    await pool.execute('INSERT IGNORE INTO settings (k, v) VALUES (?, ?)', [k, v]);
+    await run('INSERT INTO settings (k, v) VALUES (?, ?) ON CONFLICT (k) DO NOTHING', [k, v]);
   }
 }
 
@@ -137,25 +135,42 @@ export function getPool() {
   return pool;
 }
 
+function toPgSql(sql) {
+  let idx = 0;
+  return sql.replace(/\?/g, () => `$${++idx}`);
+}
+
+async function execute(sql, params = []) {
+  return pool.query(toPgSql(sql), params);
+}
+
+async function get(sql, params = []) {
+  const result = await execute(sql, params);
+  return result.rows[0];
+}
+
+async function all(sql, params = []) {
+  const result = await execute(sql, params);
+  return result.rows;
+}
+
+async function run(sql, params = []) {
+  const query = sql.trim();
+  const needsReturningId =
+    /^insert\s+into\s+(users|notices|live_channels|live_schedules|email_verifications)\b/i.test(query) &&
+    !/returning\s+/i.test(query);
+  const finalSql = needsReturningId ? `${query} RETURNING id` : query;
+  const result = await execute(finalSql, params);
+  return {
+    lastInsertRowid: result.rows?.[0]?.id,
+    affectedRows: result.rowCount
+  };
+}
+
 export default {
-  execute: async (sql, params) => {
-    const [result] = await pool.execute(sql, params);
-    return result;
-  },
-  query: async (sql, params) => {
-    const [rows] = await pool.execute(sql, params);
-    return rows;
-  },
-  get: async (sql, params) => {
-    const [rows] = await pool.execute(sql, params);
-    return rows[0];
-  },
-  run: async (sql, params) => {
-    const [result] = await pool.execute(sql, params);
-    return { lastInsertRowid: result.insertId, affectedRows: result.affectedRows };
-  },
-  all: async (sql, params) => {
-    const [rows] = await pool.execute(sql, params);
-    return rows;
-  }
+  execute,
+  query: all,
+  get,
+  run,
+  all
 };

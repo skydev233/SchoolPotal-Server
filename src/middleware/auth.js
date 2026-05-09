@@ -1,28 +1,29 @@
 import { verifyToken } from '../utils/auth.js';
 
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, reply) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authorization required' });
+    reply.status(401).send({ error: 'Authorization required' });
+    return;
   }
 
   const token = authHeader.slice(7);
   const decoded = verifyToken(token);
   if (!decoded) {
-    return res.status(401).json({ error: 'Invalid token' });
+    reply.status(401).send({ error: 'Invalid token' });
+    return;
   }
 
   req.user = decoded;
-  next();
 }
 
-export function adminMiddleware(req, res, next) {
-  authMiddleware(req, res, () => {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-  });
+export async function adminMiddleware(req, reply) {
+  await authMiddleware(req, reply);
+  if (reply.sent) return;
+
+  if (req.user.role !== 'admin') {
+    reply.status(403).send({ error: 'Admin access required' });
+  }
 }
 
 export function corsMiddleware(req, res, next) {
